@@ -45,10 +45,8 @@ class PageAllowedTemplate extends Process implements ConfigurableModule {
 	}
 
 	public function init() {
-		$this->addHookAfter('Pages::setupNew', $this, 'HookPagesSetupNew');
 		$this->addHookAfter('ProcessPageAdd::getAllowedTemplates', $this, 'HookProcessPageAddPagesGetAllowedTemplates');
 		$this->addHookBefore('ProcessPageEdit::processInput', $this, 'HookProcessPageEditPagesProcessInput');
-
 		$s = str_replace(array("\r\n","\r"), "\n", trim($this->child_template));
 		$tmp = explode("\n",$s);
 		$arr = array();
@@ -64,15 +62,6 @@ class PageAllowedTemplate extends Process implements ConfigurableModule {
 		return isset($this->treeRoots) && is_array($this->treeRoots) ? $this->treeRoots : array();
 	}
 	
-	public function HookPagesSetupNew($event) {
-		$page = $event->arguments[0];
-		$parent_id = $page->parent->id;
-		if(! in_array( $parent_id, array_keys($this->treeRoots))) {
-			return;
-		}
-		$page->template = $this->treeRoots[ $parent_id ];
-		$event->return = $page;
-	}
 	public function HookProcessPageAddPagesGetAllowedTemplates($event) {
 		$parent_id = $this->input->get->parent_id;
 		if(! in_array( $parent_id, array_keys($this->treeRoots))) {
