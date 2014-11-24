@@ -1,0 +1,97 @@
+<?php
+
+/**
+ * PageAllowedTemplate
+ * @author  jera
+ * cloned from horst
+ *
+ * ProcessWire 2.x
+ * Copyright (C) 2010 by Ryan Cramer
+ * Licensed under GNU/GPL v2, see LICENSE.TXT
+ *
+ * http://www.processwire.com
+ *
+ */
+
+class PageAllowedTemplate extends Process implements ConfigurableModule {
+
+	const permanentValue = "";
+
+	
+	public static function getModuleInfo() {
+		return array(
+			'title'     => 'Page Allowed Template',
+			'version'   => 100,
+			'summary'   => "Constrain child pages to be of a specific template, without needing to define a new parent template",
+			'href'      => 'http://lalabobo.net',
+			'author'    => 'jera',
+			'singular'  => true,
+			'autoload'  => true,
+			#'permanent' => true
+		);
+	}
+
+	public static function getModuleConfigInputfields(array $data) {
+		if(! isset($data['child_template']) || empty($data['child_template'])) $data['child_template'] = self::permanentValue;
+		$fields = new InputfieldWrapper();
+		$f = wire('modules')->get('InputfieldTextarea');
+		$f->attr('name', 'child_template');
+		$f->attr('rows', 3);
+		$f->attr('value', $data['child_template']);
+		$f->label = 'Constraint added Childpages to template';
+		$f->description = 'Each line contains a "family" relationship, in the form of "page_id, template_name". For example, "123,news-item" will cause all children of page 123 to be based on the news-item template.  There should not be restrictions in the template definitions to contradict this.';
+		$fields->append($f);
+		return $fields;
+	}
+
+	public function init() {
+		$this->addHookAfter('Pages::setupNew', $this, 'HookPagesSetupNew');
+		$this->addHookAfter('ProcessPageAdd::getAllowedTemplates', $this, 'HookProcessPageAddPagesGetAllowedTemplates');
+		$this->addHookBefore('ProcessPageEdit::processInput', $this, 'HookProcessPageEditPagesProcessInput');
+
+		$s = str_replace(array("\r\n","\r"), "\n", trim($this->child_template));
+		$tmp = explode("\n",$s);
+		$arr = array();
+		foreach($tmp as $v) {
+			if(''==trim($v)) continue;
+			$a = explode(',', trim($v));
+			$arr[$a[0]] = isset($a[1]) ? trim($a[1]) : '';
+		}
+		$this->treeRoots = $arr;
+	}
+
+	public function getTreeRoots() {
+		return isset($this->treeRoots) && is_array($this->treeRoots) ? $this->treeRoots : array();
+	}
+	
+	public function HookPagesSetupNew($event) {
+		$page = $event->arguments[0];
+		$parent_id = $page->parent->id;
+		if(! in_array( $parent_id, array_keys($this->treeRoots))) {
+			return;
+		}
+		$page->template = $this->treeRoots[ $parent_id ];
+		$event->return = $page;
+	}
+	public function HookProcessPageAddPagesGetAllowedTemplates($event) {
+		$parent_id = $this->input->get->parent_id;
+		if(! in_array( $parent_id, array_keys($this->treeRoots))) {
+			return;
+		}
+		$name = $this->treeRoots[ $parent_id ];
+		$t = $this->fuel('templates')->get( "name={$name}");
+		$arr = array( $t->id => $t);
+		$event->return = $arr;
+	}
+	public function HookProcessPageEditPagesProcessInput($event) {
+		$page = $event->object->getPage();
+		$parent_id = $page->parent->id;
+		if(! in_array( $parent_id, array_keys($this->treeRoots))) {
+			return;
+		}
+		$page->template->noChangeTemplate = true;
+		$event->object->message('FYI: You are not allowed to change the template for this page.');
+	}
+
+}
+
